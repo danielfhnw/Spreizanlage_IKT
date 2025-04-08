@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Izumi" Id="{d432de2a-9cef-45d3-a8f1-b5c1e7f407a3}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Izumi
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	iIzumiInNewton			: INT;	// converted to Newton
+END_VAR
+VAR
+	iIzumiData AT %I* 		: INT;	// measured in mV
+	iVoltage AT %I* 		: INT;	// Voltage sensor
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[iIzumiInNewton 				:= iIzumiData/100;]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

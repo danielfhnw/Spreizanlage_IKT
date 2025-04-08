@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_Axis" Id="{77405a70-8f65-4bca-9262-78eae0778b6f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+	// Winder Commands
+	bCmdEnableWinder			: BOOL;
+	bCmdStartWinder				: BOOL;
+	bCmdStopWinder				: BOOL;
+	bCmdResetWinder				: BOOL;
+	
+	// Winder Information
+	bStatusPower				: BOOL;
+	bStateCM					: BOOL;
+	bStateStopping				: BOOL;
+	bStateErrorStop				: BOOL;
+	bNewMotionParameter			: BOOL;
+	rWinderPos					: LREAL;
+	
+	// Winder Settings
+	rWinderVelocity				: LREAL := 2.7;  // Speed reference value of winder [m/min]
+	rWinderAcceleration			: LREAL := 1000;
+	rWinderDeceleration			: LREAL := 1000;
+	rWinderJerk					: LREAL := 1000;
+	iWinderDirection			: INT := 1;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

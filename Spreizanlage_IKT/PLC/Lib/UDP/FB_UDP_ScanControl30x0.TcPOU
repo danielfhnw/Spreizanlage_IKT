@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_UDP_ScanControl30x0" Id="{df14a033-d34e-4247-93f0-30a057fdecea}" SpecialFunc="None">
+    <Declaration><![CDATA[/// Implementierung für ScanControl 30x0
+FUNCTION_BLOCK FB_UDP_ScanControl30x0 EXTENDS FB_UDP_Connection
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	DataOut : ARRAY[1..3] OF BYTE;
+END_VAR
+VAR
+	Data : ARRAY[0..5000] OF BYTE;
+	DataString : STRING(5000);
+	Value1 : INT;
+	Value2 : INT;
+	Value3 : INT;
+	Value4 : INT;
+	Value5 : DINT;
+	Test : ARRAY[1..3] OF BYTE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Aufruf des Body der Basisklasse
+SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="OnNewMessage" Id="{5197e178-6c55-4a93-a1df-186b095c9fae}">
+      <Declaration><![CDATA[METHOD PROTECTED OnNewMessage
+VAR_INPUT
+	pData	: POINTER TO BYTE;
+	DataLen	: UDINT;
+END_VAR
+VAR
+	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+Diese Methode ist überschrieben aus der Basisklasse
+Bei einer eingehenden Meldung, können die DAten hier geparst und verarbeitet werden.
+*)
+
+// Demo
+MEMSET(ADR(Data), 0, SIZEOF(Data)); // Speicherbereich leeren
+MEMCPY(ADR(Data), pData, DataLen);  // 
+MEMSET(ADR(DataString),0, SIZEOF(DataString));
+MEMCPY(ADR(DataString), pData, DataLen);
+
+MEMCPY(ADR(DataOut), pData, 3);
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

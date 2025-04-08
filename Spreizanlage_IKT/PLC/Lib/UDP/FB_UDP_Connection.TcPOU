@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_UDP_Connection" Id="{0e57271c-ca23-4815-af07-6ebad1cdee82}" SpecialFunc="None">
+    <Declaration><![CDATA[/// Basis Baustein für das erstellen einer UDP Verbindung
+FUNCTION_BLOCK FB_UDP_Connection
+VAR_INPUT
+	Enable					: BOOL; // True = Verbindung herstellen
+	LocalHost				: T_IPv4Addr := '0.0.0.0'; // Lokale Adresse 
+	LocalPort				: UDINT; // Lokaler Port
+END_VAR
+VAR_OUTPUT
+	SocketCreated			: BOOL; // UDP Socket erstellt
+	ConnectionBusy			: BOOL; // UDP Socket-Erstellung läuft
+	ConnectionError			: BOOL; // UDP Socket-Erstellung Fehler
+	SendBusy				: BOOL; // Senden im gange
+END_VAR
+VAR
+	(* Receive Buffer
+	   Wird eine Grösse über 8100 Byte benötigt, 
+	   Paramter in der Globalen Variablenliste anpassen:
+	   TCPADS_MAXUDP_BUFFSIZE
+	*)
+	ReceiveBuffer			: ARRAY[0..BUFFER_SIZE] OF BYTE;
+	fbReceiveFrom			: FB_SocketUdpReceiveFrom;
+	fbSendTo				: FB_SocketUdpSendTo;
+	fbConnectionLessSocket 	: FB_ConnectionlessSocket;
+END_VAR
+VAR CONSTANT
+	BUFFER_SIZE 			: DINT := 2000; // Data Buffer in Byte
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Dieser Baustein erstellt ein Socket
+fbConnectionLessSocket(
+	nMode := 0,
+	sLocalHost := LocalHost,
+	nLocalPort := LocalPort,
+	bEnable := Enable,
+	bBusy => ConnectionBusy,
+	bError => ConnectionError);
+
+SocketCreated := fbConnectionLessSocket.eState = E_SocketConnectionlessState.eSOCKET_CREATED;
+
+// Daten empfangen
+// -----------------------
+fbReceiveFrom(
+	sSrvNetId:= , 
+	hSocket:= fbConnectionLessSocket.hSocket, 
+	cbLen:= SIZEOF(ReceiveBuffer),
+	pDest:= ADR(ReceiveBuffer),
+	bExecute:= SocketCreated AND NOT fbReceiveFrom.bBusy, 
+	tTimeout:= , 
+	bBusy=> , 
+	bError=> , 
+	nErrId=> , 
+	sRemoteHost=> , 
+	nRemotePort=> , 
+	nRecBytes=> );
+	
+IF NOT fbReceiveFrom.bBusy THEN
+	IF fbReceiveFrom.nRecBytes > 0 THEN
+		// Anzahl 
+		OnNewMessage(ADR(ReceiveBuffer), fbReceiveFrom.nRecBytes);
+	END_IF
+END_IF
+
+// Daten senden
+// Wird über die Methode Send() resp. SendString() getriggert.
+// Aufruf nötigt bis Message gesendet ist
+// -------------------------------------
+fbSendTo(
+	bBusy=> SendBusy, 
+	bError=> , 
+	nErrId=> );]]></ST>
+    </Implementation>
+    <Method Name="OnNewMessage" Id="{63f8ca28-e476-4d31-9beb-5e8735d18f31}">
+      <Declaration><![CDATA[/// Callback Methode bei eingegangenen Daten
+METHOD PROTECTED OnNewMessage
+VAR_INPUT
+	pData	: POINTER TO BYTE; // Pointer zu den eingegangenen Daten
+	DataLen	: UDINT; // Datenlänge
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*
+Diese Methode kann in einer vererbten Klasse überschrieben werden, 
+um den Basis Code nicht mit dem Prozess zu binden
+*)
+;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Send" Id="{aa540eb0-f259-4168-b056-08f9daf9d988}">
+      <Declaration><![CDATA[/// Senden von Daten
+METHOD Send : BOOL // True = Senden erfolgreich getriggert
+VAR_INPUT
+	pData		: POINTER TO BYTE; // Trigger tu den Daten
+	DataLen		: UDINT; // Datenlänge
+	RemotePeer 	: T_IPv4Addr; // Ziel Host
+	RemotePort 	: UDINT; // Ziel Port
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF fbSendTo.bBusy OR NOT SocketCreated THEN
+	Send := FALSE;
+	RETURN;
+END_IF
+
+
+fbSendTo(
+	bExecute := TRUE,
+	hsocket := fbConnectionLessSocket.hSocket,
+	sRemoteHost := RemotePeer,
+	nRemotePort := RemotePort,
+	cbLen := DataLen,
+	pSrc := pData,
+	bBusy => SendBusy);
+	
+fbSendTo(bExecute := FALSE);
+
+Send := NOT fbSendTO.bError;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SendString" Id="{bf43ba11-47ef-4120-8275-b065644dbe57}">
+      <Declaration><![CDATA[/// Senden eines Strings
+METHOD SendString : BOOL // True = Erfolgreich getriggert
+VAR_IN_OUT CONSTANT
+	Data	: STRING; // String Daten
+END_VAR
+VAR_INPUT
+	RemotePeer 	: T_IPv4Addr; // Ziel Adresse
+	RemotePort 	: UDINT; // Ziel Port
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF LEN2(ADR(data)) = 0 THEN
+	SendString := FALSE;
+	RETURN;
+END_IF
+
+SendString := Send(
+				pData := ADR(Data),
+				DataLen := LEN2(ADR(Data)),
+				RemotePeer := RemotePeer,
+				RemotePort := RemotePort);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

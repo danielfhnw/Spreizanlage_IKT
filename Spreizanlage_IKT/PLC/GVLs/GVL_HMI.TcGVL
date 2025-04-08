@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_HMI" Id="{55c4c117-0c12-4f72-9e54-90272aed3981}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+	bButtonWinderPower			: BOOL := TRUE;
+	bButtonStartWinder			: BOOL;
+	bButtonStopWinder			: BOOL;
+	bButtonResetWinder			: BOOL;
+	bButtonWinderDirection		: BOOL;
+	bButtonNotWinderDirection	: BOOL;
+	bButtonSelectionMode		: BOOL;
+	bButtonSetupMode			: BOOL;
+	bButtonManualMode			: BOOL;
+	bButtonProdutionMode 		: BOOL;
+	ActTapeSpeed				: REAL;
+	ActTorque					: LREAL;
+	RunningLength				: REAL;
+END_VAR
+
+
+
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

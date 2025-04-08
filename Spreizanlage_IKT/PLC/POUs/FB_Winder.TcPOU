@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Winder" Id="{a255db22-0433-4219-9763-b6bc0cb730ef}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Winder
+VAR_INPUT
+	bEnableWinder			: BOOL;
+	bStartWinder			: BOOL;
+	bStopWinder				: BOOL;
+	bResetWinder			: BOOL;
+	VelocityRef				: REAL;
+	bCountRev				: BOOL; // IF TRUE revolutions will be counted
+END_VAR
+VAR_OUTPUT
+	bStatusPower			: BOOL;
+	bStateCM				: BOOL;
+	bStateStopping			: BOOL;
+	bStateErrorStop			: BOOL;
+	bNewMotionParameter		: BOOL;
+	bStateError				: BOOL; // Drive indicates an error
+	ErrorCode				: UDINT; // Error code received from drive
+	RevCounter				: DINT; // Revolution counter --> required for speed ref. calculation
+	ActTapeSpeed			: REAL; // Act. tape speed [m/min]
+	RunningLength			: REAL; // Act. running length [m]
+	ActualTorque_Nm			: LREAL; // Actual motor torque [Nm]
+END_VAR
+VAR
+	fbWinderStatus			: MC_ReadStatus;
+	fbReset					: MC_Reset;
+	fbWinderPower			: MC_Power;
+	fbWinderMV				: MC_MoveVelocity;
+	fbWinderStop			: MC_Stop;
+	fbWinderReset			: MC_Reset;
+	winderAxis				: AXIS_REF;
+	refvelocity				: LREAL;
+	refvelocity_prev		: LREAL := 0.0; // to detect speed ref, changes
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(* ------------ Calculate speed reference value from tape speed ---------------
+vref = refvelocity [°/s]
+vtape = tape speed [m/min]
+d_spool = diameter of spool [mm]
+vref = 
+*)
+//refvelocity := GVL_Axis.rWinderVelocity*6000/(PI*GVL_Parameter.EmptySpoolDiameter); // m/min --> °/s
+
+refvelocity := VelocityRef*6000/(PI*GVL_Parameter.EmptySpoolDiameter); // m/min --> °/s
+
+// ------------ MC_ReadStatus ------------
+fbWinderStatus(
+	Axis			:= winderAxis,
+	Enable			:= TRUE);
+	
+	
+bStateCM			:= fbWinderStatus.ContinuousMotion;
+bStateStopping		:= fbWinderStatus.Stopping;
+bStateErrorStop		:= fbWinderStatus.ErrorStop;
+bStateError 		:= fbWinderStatus.Error;
+ErrorCode	 		:= fbWinderStatus.ErrorID;
+
+
+fbReset(Axis := winderAxis, Execute := bStateError);
+fbReset(Axis := winderAxis, Execute := FALSE);
+
+// ------------ MC_Power ------------
+IF bEnableWinder THEN
+	fbWinderPower(
+		Axis			:= winderAxis,
+		Enable			:= TRUE,
+		Enable_Positive	:= TRUE,
+		Enable_Negative	:= TRUE);
+ELSE
+	fbWinderPower(
+		Axis			:= winderAxis,
+		Enable			:= FALSE);
+END_IF
+bStatusPower		:= fbWinderPower.Status;
+
+// ------------ MC_MoveVelocity ------------
+//IF (bStartWinder AND fbWinderStatus.Status.NotMoving) OR ((refvelocity <> refvelocity_prev) AND fbWinderStatus.Status.ContinuousMotion) THEN
+IF (bStartWinder) OR ((refvelocity <> refvelocity_prev)) THEN
+	RunningLength := 0.0;  // Reset calculated running length whenever restarting
+	fbWinderMV(
+		Axis			:= winderAxis,
+		Execute			:= TRUE,
+		Velocity		:= refvelocity,
+		Acceleration	:= GVL_Axis.rWinderAcceleration,
+		Deceleration	:= GVL_Axis.rWinderDeceleration,
+		Jerk			:= GVL_Axis.rWinderJerk,
+		Direction		:= GVL_Axis.iWinderDirection);
+	refvelocity_prev 	:= refvelocity;
+ELSE
+	fbWinderMV(
+		Axis			:= winderAxis,
+		Execute			:= FALSE);
+END_IF
+
+// Not sure whta this is supposed to be used for --> currently it only triggers an text indication on the Visu
+IF fbWinderMV.Velocity <> GVL_Axis.rWinderVelocity OR
+   fbWinderMV.Acceleration <> GVL_Axis.rWinderAcceleration OR
+   fbWinderMV.Deceleration <> GVL_Axis.rWinderDeceleration OR
+   fbWinderMV.Jerk <> GVL_Axis.rWinderJerk OR
+   fbWinderMV.Direction <> GVL_Axis.iWinderDirection THEN
+	bNewMotionParameter	:= TRUE;
+ELSE
+	bNewMotionParameter	:= FALSE;
+END_IF
+
+// ------------ MC_Stop ------------
+IF bStopWinder THEN
+	fbWinderStop(
+		Axis			:= winderAxis,
+		Execute			:= TRUE);
+ELSE
+	fbWinderStop(
+		Axis			:= winderAxis,
+		Execute			:= FALSE); 
+END_IF
+
+// ------------ MC_Reset ------------
+IF bResetWinder THEN
+	fbWinderReset(
+		Axis			:= winderAxis,
+		Execute			:= TRUE);
+ELSE
+	fbWinderReset(
+		Axis			:= winderAxis,
+		Execute			:= FALSE);
+END_IF
+
+// ------------- Calculate no. of revolutions ---------------
+IF bCountRev THEN
+	RevCounter := ABS(winderAxis.NcToPlc.ModuloActTurns); 
+ELSE
+	RevCounter := 0;
+END_IF
+
+(* ------------- Calculate actual tape related values ----------------
+vtape = tape speed [m/min]
+vact = actual motor speed [°/s]
+dspool = diameter of spool [mm]
+nact = (vact*PI/180°)/(2*PI) = vact/360  (angular velocity/ (2*PI))
+vtape = nact *(PI*dspool) = vact*PI*dspool/360 * (60s/min)/(1000mm/m) = vact*PI*dspool/6000
+*)
+ActTapeSpeed := TO_REAL(ABS(winderAxis.NcToPlc.ActVelo) * PI * GVL_Parameter.EmptySpoolDiameter)/6000; // °/s --> m/min
+RunningLength := RunningLength + ActTapeSpeed * 0.01 / 60; // Integrate TapeSpeed (important: Task cycle time needs to be adapted whenever modified)
+ActualTorque_Nm := winderAxis.NcToPlc.ActTorque/10;  // Actual torque [?] --> ToDo: Check internal scaling]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

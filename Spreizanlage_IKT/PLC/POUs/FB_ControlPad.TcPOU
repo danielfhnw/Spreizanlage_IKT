@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_ControlPad" Id="{3f9588c4-0633-49c0-8fe7-5bd58a660503}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ControlPad
+VAR_INPUT
+	Reset 			: BOOL;
+	En_SpeedRefChg 	: BOOL;  // Only when enebaled speed inc./dec. will be possible
+END_VAR
+VAR_OUTPUT
+	EStopLatch	: BOOL;
+	StartCmd	: BOOL;  // Start Cmd. Trigger
+	StopCmd 	: BOOL;  // Stop Cmd. trigger
+	AddSpeed    : LREAL := 0.0; // Speed Offset to actual speed
+END_VAR
+VAR
+	bDigital_EStop AT %I* 		: BIT;	
+	bDigital_Start AT %I* 		: BIT;
+	bDigital_Stop AT %I* 		: BIT;
+	bDigital_IncSpeed AT %I*	: BIT;
+	bDigital_DecSpeed AT %I*	: BIT;
+	IncSpeed_prev				: BIT;
+	DecSpeed_prev				: BIT;
+	Start_prev					: BIT := FALSE;  // for edge detection
+	Stop_prev					: BIT := FALSE;  // for edge detection
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF NOT(bDigital_EStop) THEN
+	EStopLatch := TRUE; // Latch E-Stop for indication
+END_IF
+
+IF EStopLatch AND Reset THEN // Reset Latched signal for indication
+	EStopLatch := FALSE;
+END_IF
+
+// -------- Start Cmd. trigger to start motor (edge detection) --------
+IF bDigital_Start AND NOT(Start_prev) THEN
+	StartCmd := TRUE;
+ELSE
+	StartCmd := FALSE;
+END_IF
+Start_prev := bDigital_Start;
+
+// -------- Stop Cmd. trigger to stop motor (edge detection) --------
+IF bDigital_Stop AND NOT(Stop_prev) THEN
+	StopCmd := TRUE;
+ELSE
+	StopCmd := FALSE;
+END_IF
+Stop_prev := bDigital_Stop;
+
+// Speed ref. offset value created by Control pad
+IF En_SpeedRefChg THEN
+	IF bDigital_IncSpeed AND NOT(IncSpeed_prev) THEN
+		AddSpeed := AddSpeed + GVL_Parameter.SpeedChange;
+	ELSIF bDigital_DecSpeed AND NOT(DecSpeed_prev) THEN
+		AddSpeed := AddSpeed - GVL_Parameter.SpeedChange;
+	END_IF
+	IncSpeed_prev := bDigital_IncSpeed;
+	DecSpeed_prev := bDigital_DecSpeed;
+ELSE
+	AddSpeed := 0.0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

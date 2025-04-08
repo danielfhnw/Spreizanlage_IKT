@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_Parameter" Id="{a394d9b2-35fb-46ff-85bb-775420bff82f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL PERSISTENT  // Parameters are PERSISTENT --> Parameter will remain stored
+	Offset_Izumi  				: INT := 0; // Zur Kalibration der Izumi Daten
+	EmptySpoolDiameter 			: REAL:=100; // Diameter of the spool [mm] (used to calculate required motor speed) 
+	SpeedChange 				: LREAL := 0.2; // Increment/Decrement of speed ref. whenever control pad is used [m/min]
+	tMeas_SetupMode 			: REAL := 500;  // measuring cycle time in manual mode [ms]
+	tMeas_ProductionMode 		: REAL := 1000;  // measuring cycle time in prod. mode [ms]
+	TapeHeight					: REAL := 0.1;  // Used to adjust speed refence with increasing spool diameter [mm]
+	rWinderAcceleration			: LREAL;
+	rWinderDeceleration			: LREAL;
+	rWinderJerk					: LREAL;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

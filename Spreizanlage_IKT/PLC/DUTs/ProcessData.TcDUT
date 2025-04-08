@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ProcessData" Id="{50423197-c36a-48e7-87ba-bd53ca784dba}">
+    <Declaration><![CDATA[TYPE ProcessData :
+STRUCT
+    Id          	: DINT;
+    Value       	: DINT;
+	RunningLength 	: REAL;  // Tape running length [m]
+	Torque			: REAL; // Torque [?]
+	TapeWidth		: REAL; // Measured width of tape (Laserscanner)
+	LateralGap		: REAL;
+	Airflow			: REAL;
+	Temperature		: REAL;
+    Timestamp   	: T_MaxString; 
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,140 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_FileWriter" Id="{e0f0e5f9-840a-440e-9048-e7a45aee5a0a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FileWriter
+VAR_INPUT
+    sFilePath   : T_MaxString;
+    sFileName   : T_MaxString;
+    sNetId      : STRING;   // NetId of the target, leave empty for local
+END_VAR
+VAR
+    fbFileOpen  : FB_FileOpen;
+    fbFilePuts  : FB_FilePuts;
+    fbFileClose : FB_FileClose;
+    nFileHandle : UINT;
+    
+    arrBuffer   : ARRAY[0..100] OF T_MaxString;
+    eFileWriteState : (IDLE, OPEN_FILE, WRITE_TO_FILE, CLOSE_FILE, ERROR);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE eFileWriteState OF
+    IDLE:
+        // Make sure all the file writing FBs are ready for use (trigger on execute)
+        Init();
+        
+        // We have pending data to be written
+        IF arrBuffer[0] <> '' THEN
+            eFileWriteState := OPEN_FILE;
+        END_IF
+        
+    OPEN_FILE:
+        // Opens a file for writing at the end of the file (append). 
+        // If the file does not exist, a new file is created.
+        fbFileOpen(
+            bExecute    := TRUE,
+            sNetId      := sNetId,
+            sPathName   := CONCAT(sFilePath, sFileName),
+            nMode       := FOPEN_MODEAPPEND);
+            
+        IF fbFileOpen.bError THEN
+            eFileWriteState := ERROR;
+        ELSIF NOT fbFileOpen.bBusy THEN
+            nFileHandle := fbFileOpen.hFile;
+            fbFileOpen(bExecute := FALSE);
+            eFileWriteState := WRITE_TO_FILE;
+        END_IF
+    
+    WRITE_TO_FILE:
+        fbFilePuts(
+            bExecute    := TRUE,
+            sNetId      := sNetId,
+            hFile       := nFileHandle,
+            sLine       := arrBuffer[0]);
+        IF fbFilePuts.bError THEN
+            eFileWriteState := ERROR;
+        ELSIF NOT fbFileClose.bBusy THEN
+            // Sucess, data was written
+            // Rotate the buffer and close the file
+            RotateBuffer();
+            eFileWriteState := CLOSE_FILE; 
+        END_IF
+    
+    CLOSE_FILE:
+        fbFileClose(
+            bExecute := TRUE,
+            sNetId      := sNetId,
+            hFile       := nFileHandle);
+            
+        IF fbFileClose.bError THEN
+            eFileWriteState := ERROR;
+        ELSIF NOT fbFileClose.bBusy THEN
+            nFileHandle := 0;
+            eFileWriteState := IDLE;
+        END_IF      
+    
+    ERROR:
+        // Error, clear the handle and go back to idle
+        nFileHandle := 0;
+        eFileWriteState := IDLE;
+END_CASE]]></ST>
+    </Implementation>
+    <Method Name="Init" Id="{21480a2e-3ca9-4f45-8377-850c65473055}">
+      <Declaration><![CDATA[METHOD PRIVATE Init : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbFileClose(bExecute := FALSE);
+fbFileOpen(bExecute := FALSE);
+fbFilePuts(bExecute := FALSE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="InsertToBuffer" Id="{8b52d4fd-cad9-446e-bc04-ce6628d4f3f5}">
+      <Declaration><![CDATA[METHOD PRIVATE InsertToBuffer
+VAR_INPUT
+    value   : STRING;
+END_VAR
+VAR
+    nBufferIndex    : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR nBufferIndex := 0 TO 100 BY 1 DO
+    IF arrBuffer[nBufferIndex] = '' THEN
+        // We found the free spot in the buffer, insert the value to this place
+        arrBuffer[nBufferIndex] := value;
+        EXIT;
+    END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="RotateBuffer" Id="{624dba3b-024f-42e3-8567-88ca0a7c576a}">
+      <Declaration><![CDATA[METHOD PRIVATE RotateBuffer
+VAR
+    nIndex  : int := 0;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR nIndex := 0 TO 99 BY 1 DO
+    // We can exit when we reached the empty slot in the buffer
+    IF arrBuffer[nIndex] = '' THEN
+        EXIT;
+    END_IF
+    // FIFO, removing first element in the array copying the next, etc...
+    arrBuffer[nIndex] := arrBuffer[nIndex+1];
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="WriteToFile" Id="{792cdcf0-f93e-4174-9d3c-f36fa6b90ee2}">
+      <Declaration><![CDATA[METHOD WriteToFile : BOOL
+VAR_INPUT
+    message : T_MaxString;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[InsertToBuffer(value := message);]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

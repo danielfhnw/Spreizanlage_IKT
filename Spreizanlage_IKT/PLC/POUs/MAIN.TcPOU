@@ -1,0 +1,235 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{cb5c5919-4556-49f4-b2c5-69fca21fcbe4}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	fbWinder			: FB_Winder;
+	fbIzumi				: FB_Izumi;
+	fbLaserScanner		: FB_LaserScanner;
+	ActualState			: State := State.ManualMode;
+	ControlPad			: FB_ControlPad;
+	StartWinder			: BOOL;   // Cmd. to start winder
+	StartWinder_prev	: BOOL; // For edge detection
+	StopWinder			: BOOL;   // Cmd. to stop winder
+	
+	fbTime   			: FB_LocalSystemTime := ( bEnable := TRUE, dwCycle := 1 );  // System time synchronization 
+	logTimer 			: TON := ( IN := TRUE, PT := T#500MS );  // Timer used to generate the data acq. trigger pulse
+	fbWriteFile     	: FB_FileWriter;
+	arrTestData     	: ARRAY[0..10] OF ProcessData;
+    nIteration      	: INT;
+    bStartNewJob    	: BOOL;
+    fbFormatString  	: FB_FormatString;
+	fbGetCurrentTaskIndex   : GETCURTASKINDEX;
+	tStorage			: TIME := T#1000MS;  // frequency of data acquistion (mode dependent) [Hz]
+	FileCnt				: UINT := 0;
+	FileCnt_prev		: UINT := 0;
+	FileName				: STRING := '00';
+	// Variablen für LaserScanner
+	//fbSocketCloseAll	: FB_SocketCloseAll;
+	//fbUDP_ScanControl	: FB_UDP_ScanControl30x0;
+	//Connect : BOOL := TRUE; // True = Verbindung aktiv
+	//TestSend : BOOL; // Test send bit
+	//Res : BOOL;
+END_VAR
+VAR CONSTANT
+	cHeader 			: STRING := 'Time stamp;ID;Value;Airflow [l/min];Running Length [m];$n';
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+Beispiel der UDP Verbindung zum LaserScanner  --> Kopie des Beispielprojektes.
+
+Anforderungen:
+1. Auf der IPC muss das Packet TF6310 installiert sein
+2. Im Projekt muss die Lizenz TF6310 ausgewählt sein
+3. SocketCloseAll muss zu Begin ins Projekt eingebaut werden
+   (Schliesst alle offenen Sockets => Aufräumen)
+*)
+(*
+fbSocketCloseAll(bExecute := TRUE);
+
+fbUDP_ScanControl(
+	Enable:= NOT fbSocketCloseAll.bBusy AND Connect, 
+	LocalHost:= '192.168.50.10', 
+	LocalPort:= 61000, 
+	SocketCreated=> , 
+	ConnectionBusy=> , 
+	ConnectionError=> );
+	
+IF TestSend THEN
+	TestSend := FALSE;
+	Res := fbUDP_ScanControl.SendString('Das ist ein Test', '192.168.111.1\n', 20000);
+END_IF
+*)
+fbTime();
+
+(* State Machine (Modus selection) *)
+CASE ActualState OF
+	State.ModusSelection:
+	// Kommandos TO BE DONE
+
+		IF GVL_HMI.bButtonSetupMode THEN
+			ActualState := State.SetupMode;
+		ELSIF GVL_HMI.bButtonManualMode THEN
+			ActualState := State.ManualMode;
+		ELSIF GVL_HMI.bButtonProdutionMode THEN
+			ActualState := State.ProductionMode;
+		END_IF
+	State.ManualMode:
+	// Kommandos TO BE DONE
+		IF GVL_HMI.bButtonSetupMode THEN
+			ActualState := State.SetupMode;
+		ELSIF GVL_HMI.bButtonSelectionMode THEN
+			ActualState := State.ModusSelection;
+		ELSIF GVL_HMI.bButtonProdutionMode THEN
+			ActualState := State.ProductionMode;
+		END_IF
+	State.ProductionMode:
+		// Kommandos TO BE DONE
+		logTimer.PT := TO_TIME(GVL_Parameter.tMeas_ProductionMode);  // measuring freq. [Hz]
+		IF GVL_HMI.bButtonSetupMode THEN
+			ActualState := State.SetupMode;
+		ELSIF GVL_HMI.bButtonManualMode THEN
+			ActualState := State.ManualMode;
+		ELSIF GVL_HMI.bButtonSelectionMode THEN
+			ActualState := State.ModusSelection;
+		END_IF
+	State.SetupMode:
+		// Kommandos TO BE DONE
+		logTimer.PT := TO_TIME(GVL_Parameter.tMeas_SetupMode);  // measuring freq. [Hz]
+		IF GVL_HMI.bButtonSelectionMode THEN
+			ActualState := State.ModusSelection;
+		ELSIF GVL_HMI.bButtonManualMode THEN
+			ActualState := State.ManualMode;
+		ELSIF GVL_HMI.bButtonProdutionMode THEN
+			ActualState := State.ProductionMode;
+		END_IF
+		
+END_CASE
+
+
+// ----------------- Laser Scanner ------------------------
+fbLaserScanner();
+GVL.LaserScannerData := fbLaserScanner.DataOut;	
+
+StartWinder := GVL_Axis.bCmdStartWinder OR ControlPad.StartCmd;
+StopWinder := GVL_Axis.bCmdStopWinder OR ControlPad.StopCmd;
+
+IF fbWinder.bStateCM THEN
+	ControlPad.En_SpeedRefChg := TRUE;
+ELSE
+	ControlPad.En_SpeedRefChg := FALSE;
+END_IF
+
+// MC Winder
+fbWinder(
+	bEnableWinder			:= GVL_Axis.bCmdEnableWinder,
+	bStartWinder			:= StartWinder,
+	bStopWinder				:= StopWinder,
+	bResetWinder			:= GVL_Axis.bCmdResetWinder,
+	VelocityRef				:= GVL_Axis.rWinderVelocity + ControlPad.AddSpeed,
+	bStatusPower			=> GVL_Axis.bStatusPower,
+	bStateCM				=> GVL_Axis.bStateCM,
+	bStateStopping			=> GVL_Axis.bStateStopping,
+	bStateErrorStop			=> GVL_Axis.bStateErrorStop,
+	bNewMotionParameter		=> GVL_Axis.bNewMotionParameter,
+	ActTapeSpeed			=> GVL_HMI.ActTapeSpeed,
+	ActualTorque_Nm			=> GVL_HMI.ActTorque,
+	RunningLength			=> GVL_HMI.RunningLength);								
+	
+// Izumi Data
+fbIzumi(
+	iIzumiInNewton			=> GVL.iTensionMonitoringData);
+	
+// Control Pad
+ControlPad();
+	
+// HMI Configuration
+GVL_Axis.bCmdEnableWinder	:= GVL_HMI.bButtonWinderPower;
+GVL_Axis.bCmdStartWinder	:= GVL_HMI.bButtonStartWinder;
+GVL_Axis.bCmdStopWinder		:= GVL_HMI.bButtonStopWinder;
+GVL_Axis.bCmdResetWinder	:= GVL_HMI.bButtonResetWinder;
+
+IF GVL_HMI.bButtonWinderDirection THEN
+	GVL_Axis.iWinderDirection := 3;			// Counter-Clockwise/Negative Direction
+ELSE
+	GVL_Axis.iWinderDirection := 1;			// Clockwise/Positive Direction
+END_IF
+GVL_HMI.bButtonNotWinderDirection := NOT GVL_HMI.bButtonWinderDirection;
+
+// ----------------- Schreiben der Daten (https://stackoverflow.com/questions/76112520/how-do-i-save-data-from-my-plc-in-excel-or-csv-format-in-twincat) ------------------
+// Trigger data acq. acc. to desired measuring freq.
+IF StartWinder AND NOT(StartWinder_prev) THEN
+	FileCnt := FileCnt+1;
+	FileName := SYSTEMTIME_TO_STRING(fbTime.systemTime);
+END_IF
+StartWinder_prev := StartWinder;
+
+fbWriteFile(
+	//sFileName   := CONCAT(CONCAT('Measurement_',TO_STRING(FileCnt)),'.csv'),
+	sFileName   := CONCAT(TO_STRING(FileCnt),'.csv'),
+    sFilePath   := 'C:\',
+    sNetId      := '');
+
+IF FileCnt_prev <> FileCnt THEN
+	fbWriteFile.WriteToFile(message := cHeader);
+END_IF
+
+FileCnt_prev := FileCnt;
+
+	(*NewFileName := CONCAT(NewFileName,'-');
+	NewFileName := CONCAT(NewFileName,WORD_TO_STRING(fbTime.systemTime.wMonth));
+	NewFileName := CONCAT(NewFileName,'-');
+	NewFileName := CONCAT(NewFileName,WORD_TO_STRING(fbTime.systemTime.wYear));
+	NewFileName := CONCAT(NewFileName,'_at_');
+	NewFileName := CONCAT(NewFileName,WORD_TO_STRING(fbTime.systemTime.wHour));
+	NewFileName := CONCAT(NewFileName,'-');
+	NewFileName := CONCAT(NewFileName,WORD_TO_STRING(fbTime.systemTime.wMinute));
+	NewFileName := CONCAT(NewFileName,'-');
+	NewFileName := CONCAT(NewFileName,WORD_TO_STRING(fbTime.systemTime.wSecond));*)
+
+(*fbGetCurrentTaskIndex();
+IF _TaskInfo[fbGetCurrentTaskIndex.index].FirstCycle THEN
+    fbWriteFile.WriteToFile(message := cHeader);
+END_IF*)
+
+logTimer( IN := fbTime.bValid AND fbWinder.bStateCM);  // Start trigger for data acq.
+IF logTimer.Q THEN
+    logTimer( IN := FALSE );
+	logTimer( IN := fbTime.bValid );
+	bStartNewJob := TRUE;
+END_IF
+
+IF bStartNewJob THEN
+    // Making up some fake data to store it
+    arrTestData[nIteration].Id := nIteration;                   // just some made up id
+    arrTestData[nIteration].Value := 5*nIteration;              // just some made up value
+	arrTestData[nIteration].Airflow := 23.6;
+	arrTestData[nIteration].RunningLength := fbWinder.RunningLength;
+    arrTestData[nIteration].Timestamp := SYSTEMTIME_TO_STRING(fbTime.systemTime); 
+    
+    // Create the full line by using the FB_FormatString, way easier than CONCAT
+    fbFormatString(
+        sFormat := '%s;%d;%d;%f;%f$n',
+		arg1    := F_STRING(arrTestData[nIteration].Timestamp),
+        arg2    := F_DINT(arrTestData[nIteration].Id),
+        arg3    := F_DINT(arrTestData[nIteration].Value),
+		arg4	:= F_REAL(arrTestData[nIteration].Airflow),
+		arg5	:= F_REAL(arrTestData[nIteration].RunningLength));
+
+    // Send the created line to the file writer
+    fbWriteFile.WriteToFile(message := fbFormatString.sOut);
+
+    // Increasing the counter for new, different data
+    IF nIteration <10 THEN
+        nIteration := nIteration + 1;
+    ELSE
+        nIteration := 0;
+    END_IF
+    
+    // And finally, clear the trigger
+    bStartNewJob := FALSE;      
+END_IF
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
