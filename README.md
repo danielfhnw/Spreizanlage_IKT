@@ -6,7 +6,7 @@ Die folgenden Schritte müssen ausgeführt worden sein, bevor das Projekt geöff
 
 ### [Package Manager](https://www.beckhoff.com/en-en/products/automation/twincat/twincat-3-build-4026/)
 Der Package Manager muss heruntergeladen sein. Darüber müssen die folgenden Produkte installiert werden:
-- TwinCAT Standard - Engineering
+- TwinCAT Standard - Engineering (ACHTUNG: 4026.14 Build)
 - TE5950 | TwinCAT 3 DriveManager 2
 - TF6310 | TwinCAT 3 TCP/IP
 
