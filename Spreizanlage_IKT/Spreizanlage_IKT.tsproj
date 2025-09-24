@@ -1442,7 +1442,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-00200000000D}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..12] OF BIT</Name>
 			<BitSize>13</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -1523,7 +1523,7 @@ External Setpoint Generation:
 			</ArrayInfo>
 		</DataType>
 		<DataType>
-			<Name GUID="{18071995-0000-0000-0000-00200000000A}" IecBaseType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..9] OF BIT</Name>
+			<Name GUID="{18071995-0000-0000-0000-00200000000A}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..9] OF BIT</Name>
 			<BitSize>10</BitSize>
 			<BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
 			<ArrayInfo>
@@ -1599,8 +1599,8 @@ External Setpoint Generation:
 					<Name>Achse 1</Name>
 					<AxisPara>
 						<General UnitName="°"/>
-						<Dynamic Acceleration="1592.706" Deceleration="1592.706" Jerk="4778.118"/>
-						<Velo RefSearch="10.61804" RefSync="10.61804" SlowManual="53.0902" FastManual="318.5412" Fast="1061.804" Maximum="1061.804"/>
+						<Dynamic Acceleration="1592.71" Deceleration="1592.71" Jerk="4778.12"/>
+						<Velo RefSearch="10.61804" RefSync="10.61804" SlowManual="53.0902" FastManual="318.5412" Fast="1061.804" Maximum="1061.8"/>
 						<OtherSettings AllowMotionCmdToSlave="true"/>
 					</AxisPara>
 					<Encoder Name="Enc" EncType="19">
